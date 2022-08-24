@@ -1,44 +1,46 @@
 -- This Source Code Form is subject to the terms of the Mozilla Public
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Database.CQL.IO.Timeouts
-    ( TimeoutManager
-    , Milliseconds (..)
-    , create
-    , destroy
-    , Action
-    , add
-    , cancel
-    , withTimeout
-    ) where
+module Database.CQL.IO.Timeouts (
+    TimeoutManager,
+    Milliseconds (..),
+    create,
+    destroy,
+    Action,
+    add,
+    cancel,
+    withTimeout,
+) where
 
 import Control.Concurrent.STM
-import Control.Exception (mask_, bracket)
-import Control.Reaper
+import Control.Exception (bracket, mask_)
 import Control.Monad
-import Database.CQL.IO.Exception (ignore)
+import Control.Reaper
 import Database.CQL.IO.Connection.Settings (Milliseconds (..))
+import Database.CQL.IO.Exception (ignore)
 
 data TimeoutManager = TimeoutManager
     { roundtrip :: !Int
-    , reaper    :: !(Reaper [Action] Action)
+    , reaper :: !(Reaper [Action] Action)
     }
 
 data Action = Action
     { action :: !(IO ())
-    , state  :: !(TVar State)
+    , state :: !(TVar State)
     }
 
 data State = Running !Int | Canceled
 
 create :: Milliseconds -> IO TimeoutManager
-create (Ms n) = TimeoutManager n <$> mkReaper defaultReaperSettings
-    { reaperAction = mkListAction prune
-    , reaperDelay  = n * 1000
-    }
+create (Ms n) =
+    TimeoutManager n
+        <$> mkReaper
+            defaultReaperSettings
+                { reaperAction = mkListAction prune
+                , reaperDelay = n * 1000
+                }
   where
     prune a = do
         s <- atomically $ do
@@ -50,19 +52,20 @@ create (Ms n) = TimeoutManager n <$> mkReaper defaultReaperSettings
                 ignore (action a)
                 return Nothing
             Canceled -> return Nothing
-            _        -> return $ Just a
+            _ -> return $ Just a
 
     newState (Running k) = Running (k - 1)
-    newState s           = s
+    newState s = s
 
 destroy :: TimeoutManager -> Bool -> IO ()
 destroy tm exec = mask_ $ do
     a <- reaperStop (reaper tm)
     when exec $ mapM_ f a
   where
-    f e = readTVarIO (state e) >>= \s -> case s of
-        Running _ -> ignore (action e)
-        Canceled  -> return ()
+    f e =
+        readTVarIO (state e) >>= \s -> case s of
+            Running _ -> ignore (action e)
+            Canceled -> return ()
 
 add :: TimeoutManager -> Milliseconds -> IO () -> IO Action
 add tm (Ms n) a = do

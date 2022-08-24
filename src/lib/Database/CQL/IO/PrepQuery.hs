@@ -2,33 +2,31 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-module Database.CQL.IO.PrepQuery
-    ( PrepQuery
-    , prepared
-    , queryString
-
-    , PreparedQueries
-    , new
-    , lookupQueryId
-    , lookupQueryString
-    , insert
-    , delete
-    , queryStrings
-    ) where
+module Database.CQL.IO.PrepQuery (
+    PrepQuery,
+    prepared,
+    queryString,
+    PreparedQueries,
+    new,
+    lookupQueryId,
+    lookupQueryString,
+    insert,
+    delete,
+    queryStrings,
+) where
 
 import Control.Applicative
 import Control.Concurrent.STM
 import Control.Monad
 import Crypto.Hash
-import Crypto.Hash.Algorithms (SHA1)
 import Data.ByteString (ByteString)
-import Data.Text.Lazy (Text)
-import Data.Text.Lazy.Encoding (encodeUtf8)
 import Data.Foldable (for_)
 import Data.Map.Strict (Map)
 import Data.String
-import Database.CQL.Protocol hiding (Map)
+import Data.Text.Lazy (Text)
+import Data.Text.Lazy.Encoding (encodeUtf8)
 import Database.CQL.IO.Exception (HashCollision (..))
+import Database.CQL.Protocol hiding (Map)
 import Prelude
 
 import qualified Data.Map.Strict as M
@@ -79,7 +77,7 @@ import qualified Data.Map.Strict as M
 -- as locally using 'withPrepareStrategy'.
 data PrepQuery k a b = PrepQuery
     { pqStr :: !(QueryString k a b)
-    , pqId  :: !PrepQueryId
+    , pqId :: !PrepQueryId
     }
 
 instance IsString (PrepQuery k a b) where
@@ -96,12 +94,12 @@ queryString = pqStr
 -----------------------------------------------------------------------------
 -- Map of prepared queries to their query ID and query string
 
-newtype QST = QST { unQST :: Text }
-newtype QID = QID { unQID :: ByteString } deriving (Eq, Ord)
+newtype QST = QST {unQST :: Text}
+newtype QID = QID {unQID :: ByteString} deriving (Eq, Ord)
 
 data PreparedQueries = PreparedQueries
     { queryMap :: !(TVar (Map PrepQueryId (QID, QST)))
-    , qid2Str  :: !(TVar (Map QID QST))
+    , qid2Str :: !(TVar (Map QID QST))
     }
 
 new :: IO PreparedQueries
@@ -123,7 +121,7 @@ insert q i m = do
     for_ qq (verify . snd)
     modifyTVar' (queryMap m) $
         M.insert (pqId q) (QID $ unQueryId i, QST $ unQueryString (pqStr q))
-    modifyTVar' (qid2Str  m) $
+    modifyTVar' (qid2Str m) $
         M.insert (QID $ unQueryId i) (QST $ unQueryString (pqStr q))
   where
     verify qs =
@@ -138,7 +136,7 @@ delete q m = do
     modifyTVar' (queryMap m) $ M.delete (pqId q)
     case qid of
         Nothing -> return ()
-        Just  i -> modifyTVar' (qid2Str m) $ M.delete (fst i)
+        Just i -> modifyTVar' (qid2Str m) $ M.delete (fst i)
 
 queryStrings :: PreparedQueries -> STM [Text]
 queryStrings m = map (unQST . snd) . M.elems <$> readTVar (queryMap m)

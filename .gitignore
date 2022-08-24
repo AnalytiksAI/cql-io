@@ -11,3 +11,4 @@ ID
 cabal.sandbox.config
 cabal-dev/
 .cabal-sandbox/
+dist-newstyle/

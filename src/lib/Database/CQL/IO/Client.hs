@@ -1,58 +1,56 @@
 -- This Source Code Form is subject to the terms of the Mozilla Public
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ViewPatterns #-}
 
-module Database.CQL.IO.Client
-    ( Client
-    , MonadClient (..)
-    , ClientState
-    , DebugInfo (..)
-    , ControlState (..)
-    , runClient
-    , init
-    , shutdown
-    , request
-    , requestN
-    , request1
-    , execute
-    , executeWithPrepare
-    , prepare
-    , retry
-    , once
-    , debugInfo
-    , preparedQueries
-    , withPrepareStrategy
-    , getResult
-    , unexpected
-    , C.defQueryParams
-    ) where
+module Database.CQL.IO.Client (
+    Client,
+    MonadClient (..),
+    ClientState,
+    DebugInfo (..),
+    ControlState (..),
+    runClient,
+    init,
+    shutdown,
+    request,
+    requestN,
+    request1,
+    execute,
+    executeWithPrepare,
+    prepare,
+    retry,
+    once,
+    debugInfo,
+    preparedQueries,
+    withPrepareStrategy,
+    getResult,
+    unexpected,
+    C.defQueryParams,
+) where
 
 import Control.Applicative
-import Control.Concurrent (threadDelay, forkIO)
+import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.Async (async, wait)
 import Control.Concurrent.STM (STM, atomically)
 import Control.Concurrent.STM.TVar
 import Control.Exception (IOException, SomeAsyncException (..))
-import Control.Lens (makeLenses, (^.), set, over, view)
-import Control.Monad (when, unless)
+import Control.Lens (makeLenses, over, set, view, (^.))
+import Control.Monad (unless, when)
 import Control.Monad.Catch
 import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift
-import Control.Monad.Reader (ReaderT (..), runReaderT, MonadReader, ask)
+import Control.Monad.Reader (MonadReader, ReaderT (..), ask, runReaderT)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
-import Control.Retry (capDelay, exponentialBackoff, rsIterNumber)
-import Control.Retry (recovering)
-import Data.Foldable (for_, foldrM)
+import Control.Retry (capDelay, exponentialBackoff, recovering, rsIterNumber)
+import Data.Foldable (foldrM, for_)
 import Data.List (find)
 import Data.Map.Strict (Map)
 import Data.Maybe (fromMaybe, listToMaybe)
@@ -61,7 +59,7 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.Word
 import Database.CQL.IO.Cluster.Host
 import Database.CQL.IO.Cluster.Policies
-import Database.CQL.IO.Connection (Connection, host, Raw)
+import Database.CQL.IO.Connection (Connection, Raw, host)
 import Database.CQL.IO.Connection.Settings
 import Database.CQL.IO.Exception
 import Database.CQL.IO.Jobs
@@ -75,17 +73,17 @@ import Database.CQL.Protocol hiding (Map)
 import OpenSSL.Session (SomeSSLException)
 import Prelude hiding (init)
 
-import qualified Control.Monad.Reader              as Reader
-import qualified Control.Monad.State.Strict        as S
-import qualified Control.Monad.State.Lazy          as LS
-import qualified Data.List.NonEmpty                as NE
-import qualified Data.Map.Strict                   as Map
+import qualified Control.Monad.Reader as Reader
+import qualified Control.Monad.State.Lazy as LS
+import qualified Control.Monad.State.Strict as S
+import qualified Data.List.NonEmpty as NE
+import qualified Data.Map.Strict as Map
 import qualified Database.CQL.IO.Cluster.Discovery as Disco
-import qualified Database.CQL.IO.Connection        as C
-import qualified Database.CQL.IO.Pool              as Pool
-import qualified Database.CQL.IO.PrepQuery         as PQ
-import qualified Database.CQL.IO.Timeouts          as TM
-import qualified Database.CQL.Protocol             as Cql
+import qualified Database.CQL.IO.Connection as C
+import qualified Database.CQL.IO.Pool as Pool
+import qualified Database.CQL.IO.PrepQuery as PQ
+import qualified Database.CQL.IO.Timeouts as TM
+import qualified Database.CQL.Protocol as Cql
 
 data ControlState
     = Connected
@@ -94,7 +92,7 @@ data ControlState
     deriving (Eq, Ord, Show)
 
 data Control = Control
-    { _state      :: !ControlState
+    { _state :: !ControlState
     , _connection :: !Connection
     }
 
@@ -106,12 +104,12 @@ data Context = Context
 
 -- | Opaque client state/environment.
 data ClientState = ClientState
-    { _context     :: !Context
-    , _policy      :: !Policy
+    { _context :: !Context
+    , _policy :: !Policy
     , _prepQueries :: !PreparedQueries
-    , _control     :: !(TVar Control)
-    , _hostmap     :: !(TVar (Map Host Pool))
-    , _jobs        :: !(Jobs InetAddr)
+    , _control :: !(TVar Control)
+    , _hostmap :: !(TVar (Map Host Pool))
+    , _jobs :: !(Jobs InetAddr)
     }
 
 makeLenses ''Control
@@ -128,22 +126,24 @@ makeLenses ''ClientState
 -- To lift 'Client' actions into another monad, see 'MonadClient'.
 newtype Client a = Client
     { client :: ReaderT ClientState IO a
-    } deriving ( Functor
-               , Applicative
-               , Monad
-               , MonadIO
-               , MonadUnliftIO
-               , MonadThrow
-               , MonadCatch
-               , MonadMask
-               , MonadReader ClientState
-               )
+    }
+    deriving
+        ( Functor
+        , Applicative
+        , Monad
+        , MonadIO
+        , MonadUnliftIO
+        , MonadThrow
+        , MonadCatch
+        , MonadMask
+        , MonadReader ClientState
+        )
 
 -- | Monads in which 'Client' actions may be embedded.
-class (MonadIO m, MonadThrow m) => MonadClient m
-  where
+class (MonadIO m, MonadThrow m) => MonadClient m where
     -- | Lift a computation from the 'Client' monad.
     liftClient :: Client a -> m a
+
     -- | Execute an action with a modified 'ClientState'.
     localState :: (ClientState -> ClientState) -> m a -> m a
 
@@ -152,19 +152,19 @@ instance MonadClient Client where
     localState = Reader.local
 
 instance MonadClient m => MonadClient (ReaderT r m) where
-    liftClient     = lift . liftClient
+    liftClient = lift . liftClient
     localState f m = ReaderT (localState f . runReaderT m)
 
 instance MonadClient m => MonadClient (S.StateT s m) where
-    liftClient     = lift . liftClient
+    liftClient = lift . liftClient
     localState f m = S.StateT (localState f . S.runStateT m)
 
 instance MonadClient m => MonadClient (LS.StateT s m) where
-    liftClient     = lift . liftClient
+    liftClient = lift . liftClient
     localState f m = LS.StateT (localState f . LS.runStateT m)
 
 instance MonadClient m => MonadClient (ExceptT e m) where
-    liftClient     = lift . liftClient
+    liftClient = lift . liftClient
     localState f m = ExceptT $ localState f (runExceptT m)
 
 -----------------------------------------------------------------------------
@@ -176,7 +176,7 @@ runClient p a = liftIO $ runReaderT (client a) p
 
 -- | Use given 'RetrySettings' during execution of some client action.
 retry :: MonadClient m => RetrySettings -> m a -> m a
-retry r = localState (set (context.settings.retrySettings) r)
+retry r = localState (set (context . settings . retrySettings) r)
 
 -- | Execute a client action once, without retries, i.e.
 --
@@ -190,7 +190,7 @@ once = retry noRetry
 
 -- | Change the default 'PrepareStrategy' for the given client action.
 withPrepareStrategy :: MonadClient m => PrepareStrategy -> m a -> m a
-withPrepareStrategy s = localState (set (context.settings.prepStrategy) s)
+withPrepareStrategy s = localState (set (context . settings . prepStrategy) s)
 
 -- | Send a 'Request' to the server and return a 'Response'.
 --
@@ -216,28 +216,33 @@ request a = liftClient $ do
 --   * If no host is available from the 'Policy', 'NoHostAvailable' is thrown.
 --   * If no host can execute the request, e.g. because all streams
 --     on all connections are occupied, 'HostsBusy' is thrown.
-requestN :: (Tuple b, Tuple a)
-    => Word
-    -> Request k a b
-    -> ClientState
-    -> Client (HostResponse k a b)
-requestN !n a s = liftIO (select (s^.policy)) >>= \case
-    Nothing -> replaceControl >> throwM NoHostAvailable
-    Just  h -> tryRequest1 h a s >>= \case
-        Just hr -> return hr
-        Nothing -> if n > 1
-            then requestN (n - 1) a s
-            else throwM HostsBusy
+requestN ::
+    (Tuple b, Tuple a) =>
+    Word ->
+    Request k a b ->
+    ClientState ->
+    Client (HostResponse k a b)
+requestN !n a s =
+    liftIO (select (s ^. policy)) >>= \case
+        Nothing -> replaceControl >> throwM NoHostAvailable
+        Just h ->
+            tryRequest1 h a s >>= \case
+                Just hr -> return hr
+                Nothing ->
+                    if n > 1
+                        then requestN (n - 1) a s
+                        else throwM HostsBusy
 
 -- | Send a 'Request' to a specific 'Host'.
 --
 -- If the request cannot be executed on the given host, e.g.
 -- because all connections are occupied, 'HostsBusy' is thrown.
-request1 :: (Tuple a, Tuple b)
-    => Host
-    -> Request k a b
-    -> ClientState
-    -> Client (HostResponse k a b)
+request1 ::
+    (Tuple a, Tuple b) =>
+    Host ->
+    Request k a b ->
+    ClientState ->
+    Client (HostResponse k a b)
 request1 h r s = do
     rs <- tryRequest1 h r s
     maybe (throwM HostsBusy) return rs
@@ -246,13 +251,14 @@ request1 h r s = do
 --
 -- If the request cannot be executed on the given host, e.g.
 -- because all connections are occupied, 'Nothing' is returned.
-tryRequest1 :: (Tuple a, Tuple b)
-    => Host
-    -> Request k a b
-    -> ClientState
-    -> Client (Maybe (HostResponse k a b))
+tryRequest1 ::
+    (Tuple a, Tuple b) =>
+    Host ->
+    Request k a b ->
+    ClientState ->
+    Client (Maybe (HostResponse k a b))
 tryRequest1 h a s = do
-    pool <- Map.lookup h <$> readTVarIO' (s^.hostmap)
+    pool <- Map.lookup h <$> readTVarIO' (s ^. hostmap)
     case pool of
         Just p -> do
             result <- Pool.with p exec `catches` handlers
@@ -262,8 +268,8 @@ tryRequest1 h a s = do
             return result
         Nothing -> do
             logError' $ "No pool for host: " <> string8 (show h)
-            p' <- mkPool (s^.context) h
-            atomically' $ modifyTVar' (s^.hostmap) (Map.alter (maybe (Just p') Just) h)
+            p' <- mkPool (s ^. context) h
+            atomically' $ modifyTVar' (s ^. hostmap) (Map.alter (maybe (Just p') Just) h)
             tryRequest1 h a s
   where
     exec c = do
@@ -271,8 +277,8 @@ tryRequest1 h a s = do
         return $ HostResponse h r
 
     handlers =
-        [ Handler $ \(e :: ConnectionError)  -> onConnectionError e
-        , Handler $ \(e :: IOException)      -> onConnectionError e
+        [ Handler $ \(e :: ConnectionError) -> onConnectionError e
+        , Handler $ \(e :: IOException) -> onConnectionError e
         , Handler $ \(e :: SomeSSLException) -> onConnectionError e
         ]
 
@@ -282,12 +288,12 @@ tryRequest1 h a s = do
         -- Tell the policy that the host is down until monitoring confirms
         -- it is still up, which will be signalled by a subsequent 'HostUp'
         -- event.
-        liftIO $ ignore $ onEvent (e^.policy) (HostDown (h^.hostAddr))
-        runJob_ (e^.jobs) (h^.hostAddr) $
+        liftIO $ ignore $ onEvent (e ^. policy) (HostDown (h ^. hostAddr))
+        runJob_ (e ^. jobs) (h ^. hostAddr) $
             runClient e $ monitor (Ms 0) (Ms 30000) h
         -- Any connection error may indicate a problem with the
         -- control connection, if it uses the same host.
-        ch <- fmap (view (connection.host)) . readTVarIO' =<< view control
+        ch <- fmap (view (connection . host)) . readTVarIO' =<< view control
         when (h == ch) $ do
             ok <- checkControl
             unless ok replaceControl
@@ -299,13 +305,14 @@ tryRequest1 h a s = do
 -- | Execute the given request. If an 'Unprepared' error is returned, this
 -- function will automatically try to re-prepare the query and re-execute
 -- the original request using the same host which was used for re-preparation.
-executeWithPrepare :: (Tuple b, Tuple a)
-    => Maybe Host
-    -> Request k a b
-    -> Client (HostResponse k a b)
+executeWithPrepare ::
+    (Tuple b, Tuple a) =>
+    Maybe Host ->
+    Request k a b ->
+    Client (HostResponse k a b)
 executeWithPrepare mh rq
     | Just h <- mh = exec (request1 h)
-    | otherwise    = do
+    | otherwise = do
         p <- view policy
         n <- liftIO $ hostCount p
         exec (requestN n)
@@ -318,7 +325,7 @@ executeWithPrepare mh rq
                 qs <- atomically' (PQ.lookupQueryString (QueryId i) pq)
                 case qs of
                     Nothing -> throwM $ UnexpectedQueryId (QueryId i)
-                    Just  s -> do
+                    Just s -> do
                         (h, _) <- prepare (Just LazyPrepare) (s :: Raw QueryString)
                         executeWithPrepare (Just h) rq
             _ -> return r
@@ -329,22 +336,21 @@ executeWithPrepare mh rq
 prepare :: (Tuple b, Tuple a) => Maybe PrepareStrategy -> QueryString k a b -> Client (Host, QueryId k a b)
 prepare (Just LazyPrepare) qs = do
     s <- ask
-    n <- liftIO $ hostCount (s^.policy)
+    n <- liftIO $ hostCount (s ^. policy)
     r <- withRetries (requestN n) (RqPrepare (Prepare qs))
     getPreparedQueryId r
-
-prepare (Just EagerPrepare) qs = view policy
-    >>= liftIO . current
-    >>= mapM (action (RqPrepare (Prepare qs)))
-    >>= first
+prepare (Just EagerPrepare) qs =
+    view policy
+        >>= liftIO . current
+        >>= mapM (action (RqPrepare (Prepare qs)))
+        >>= first
   where
     action rq h = withRetries (request1 h) rq >>= getPreparedQueryId
 
-    first (x:_) = return x
-    first []    = replaceControl >> throwM NoHostAvailable
-
+    first (x : _) = return x
+    first [] = replaceControl >> throwM NoHostAvailable
 prepare Nothing qs = do
-    ps <- view (context.settings.prepStrategy)
+    ps <- view (context . settings . prepStrategy)
     prepare (Just ps) qs
 
 -- | Execute a prepared query (transparently re-preparing if necessary).
@@ -364,41 +370,42 @@ prepareAllQueries h = do
     pq <- view prepQueries
     qs <- atomically' $ PQ.queryStrings pq
     for_ qs $ \q ->
-        let qry = QueryString q :: Raw QueryString in
-        withRetries (request1 h) (RqPrepare (Prepare qry))
+        let qry = QueryString q :: Raw QueryString
+         in withRetries (request1 h) (RqPrepare (Prepare qry))
 
 ------------------------------------------------------------------------------
 -- Debug info
 
 data DebugInfo = DebugInfo
     { policyInfo :: String
-        -- ^ Host 'Policy' string representation.
+    -- ^ Host 'Policy' string representation.
     , jobInfo :: [InetAddr]
-        -- ^ Hosts with running background jobs (e.g. monitoring of hosts
-        -- currently considered down).
+    -- ^ Hosts with running background jobs (e.g. monitoring of hosts
+    -- currently considered down).
     , hostInfo :: [Host]
-        -- ^ All known hosts.
+    -- ^ All known hosts.
     , controlInfo :: (Host, ControlState)
-        -- ^ Control connection information.
+    -- ^ Control connection information.
     }
 
 instance Show DebugInfo where
-    show dbg = showString "running jobs: "
-             . shows (jobInfo dbg)
-             . showString "\nknown hosts: "
-             . shows (hostInfo dbg)
-             . showString "\npolicy info: "
-             . shows (policyInfo dbg)
-             . showString "\ncontrol host: "
-             . shows (controlInfo dbg)
-             $ ""
+    show dbg =
+        showString "running jobs: "
+            . shows (jobInfo dbg)
+            . showString "\nknown hosts: "
+            . shows (hostInfo dbg)
+            . showString "\npolicy info: "
+            . shows (policyInfo dbg)
+            . showString "\ncontrol host: "
+            . shows (controlInfo dbg)
+            $ ""
 
 debugInfo :: MonadClient m => m DebugInfo
 debugInfo = liftClient $ do
     hosts <- Map.keys <$> (readTVarIO' =<< view hostmap)
-    pols  <- liftIO . display =<< view policy
-    jbs   <- listJobKeys =<< view jobs
-    ctrl  <- (\(Control s c) -> (c^.host, s)) <$> (readTVarIO' =<< view control)
+    pols <- liftIO . display =<< view policy
+    jbs <- listJobKeys =<< view jobs
+    ctrl <- (\(Control s c) -> (c ^. host, s)) <$> (readTVarIO' =<< view control)
     return $ DebugInfo pols jbs hosts ctrl
 
 preparedQueries :: Client PreparedQueries
@@ -414,45 +421,46 @@ init s = liftIO $ do
     tom <- TM.create (Ms 250)
     ctx <- Context s tom <$> signal
     bracketOnError (mkContact ctx) C.close $ \con -> do
-        pol <- s^.policyMaker
-        cst <- ClientState ctx
+        pol <- s ^. policyMaker
+        cst <-
+            ClientState ctx
                 <$> pure pol
                 <*> PQ.new
                 <*> newTVarIO (Control Connected con)
                 <*> newTVarIO Map.empty
                 <*> newJobs
-        ctx^.sigMonit |-> onEvent pol
+        ctx ^. sigMonit |-> onEvent pol
         runClient cst (setupControl con)
         return cst
 
 -- | Try to establish a connection to one of the initial contacts.
 mkContact :: Context -> IO Connection
-mkContact (Context s t _) = tryAll (s^.contacts) mkConnection
+mkContact (Context s t _) = tryAll (s ^. contacts) mkConnection
   where
     mkConnection h = do
-        as <- C.resolve h (s^.portnumber)
+        as <- C.resolve h (s ^. portnumber)
         NE.fromList as `tryAll` doConnect
 
     doConnect a = do
-        logDebug (s^.logger) $ "Connecting to " <> string8 (show a)
-        c <- C.connect (s^.connSettings) t (s^.protoVersion) (s^.logger) (Host a "" "")
+        logDebug (s ^. logger) $ "Connecting to " <> string8 (show a)
+        c <- C.connect (s ^. connSettings) t (s ^. protoVersion) (s ^. logger) (Host a "" "")
         return c
 
 discoverPeers :: MonadIO m => Context -> Connection -> m [Host]
 discoverPeers ctx c = liftIO $ do
-    let p = ctx^.settings.portnumber
+    let p = ctx ^. settings . portnumber
     map (peer2Host p . asRecord) <$> C.query c One Disco.peers ()
 
 mkPool :: MonadIO m => Context -> Host -> m Pool
 mkPool ctx h = liftIO $ do
-    let s = ctx^.settings
-    let m = s^.connSettings.maxStreams
-    Pool.create (connOpen s) connClose (ctx^.settings.logger) (s^.poolSettings) m
+    let s = ctx ^. settings
+    let m = s ^. connSettings . maxStreams
+    Pool.create (connOpen s) connClose (ctx ^. settings . logger) (s ^. poolSettings) m
   where
-    lgr = ctx^.settings.logger
+    lgr = ctx ^. settings . logger
 
     connOpen s = do
-        c <- C.connect (s^.connSettings) (ctx^.timeouts) (s^.protoVersion) lgr h
+        c <- C.connect (s ^. connSettings) (ctx ^. timeouts) (s ^. protoVersion) lgr h
         logDebug lgr $ "Connection established: " <> string8 (show c)
         return c
 
@@ -471,10 +479,10 @@ shutdown :: MonadIO m => ClientState -> m ()
 shutdown s = liftIO $ asyncShutdown >>= wait
   where
     asyncShutdown = async $ do
-        TM.destroy (s^.context.timeouts) True
-        cancelJobs (s^.jobs)
-        ignore $ C.close . view connection =<< readTVarIO (s^.control)
-        mapM_ Pool.destroy . Map.elems =<< readTVarIO (s^.hostmap)
+        TM.destroy (s ^. context . timeouts) True
+        cancelJobs (s ^. jobs)
+        ignore $ C.close . view connection =<< readTVarIO (s ^. control)
+        mapM_ Pool.destroy . Map.elems =<< readTVarIO (s ^. hostmap)
 
 -----------------------------------------------------------------------------
 -- Monitoring
@@ -504,14 +512,15 @@ monitor initial maxDelay h = do
         hosts <- liftIO . readTVarIO =<< view hostmap
         when (Map.member h hosts) $ do
             isUp <- C.canConnect h
-            if isUp then do
-                sig <- view (context.sigMonit)
-                liftIO $ sig $$ (HostUp (h^.hostAddr))
-                logInfo' $ "Reachable: " <> string8 (show h)
-            else do
-                logInfo' $ "Unreachable: " <> string8 (show h)
-                liftIO $ threadDelay (2^n * minDelay)
-                hostCheck (min (n + 1) maxExp)
+            if isUp
+                then do
+                    sig <- view (context . sigMonit)
+                    liftIO $ sig $$ (HostUp (h ^. hostAddr))
+                    logInfo' $ "Reachable: " <> string8 (show h)
+                else do
+                    logInfo' $ "Unreachable: " <> string8 (show h)
+                    liftIO $ threadDelay (2 ^ n * minDelay)
+                    hostCheck (min (n + 1) maxExp)
 
     -- Bounded to 5min
     toMicros :: Milliseconds -> Int
@@ -519,10 +528,10 @@ monitor initial maxDelay h = do
 
     minDelay :: Int
     minDelay = 50000 -- 50ms
-
     maxExp :: Int
-    maxExp = let steps = fromIntegral (toMicros maxDelay `div` minDelay) :: Double
-              in floor (logBase 2 steps)
+    maxExp =
+        let steps = fromIntegral (toMicros maxDelay `div` minDelay) :: Double
+         in floor (logBase 2 steps)
 
 -----------------------------------------------------------------------------
 -- Exception handling
@@ -535,39 +544,41 @@ monitor initial maxDelay h = do
 -- responses must not escape this function as exceptions. Deciding if and when
 -- to actually throw a 'ResponseError' upon inspection of the 'HostResponse'
 -- must be left to the caller.
-withRetries
-    :: (Tuple a, Tuple b)
-    => (Request k a b -> ClientState -> Client (HostResponse k a b))
-    -> Request k a b
-    -> Client (HostResponse k a b)
+withRetries ::
+    (Tuple a, Tuple b) =>
+    (Request k a b -> ClientState -> Client (HostResponse k a b)) ->
+    Request k a b ->
+    Client (HostResponse k a b)
 withRetries fn a = do
     s <- ask
-    let how = s^.context.settings.retrySettings.retryPolicy
-    let what = s^.context.settings.retrySettings.retryHandlers
-    r <- try $ recovering how what $ \i -> do
-        hr <- if rsIterNumber i == 0
-                 then fn a s
-                 else fn (newRequest s) (adjust s)
-        -- [Note: Error responses]
-        maybe (return hr) throwM (toResponseError hr)
+    let how = s ^. context . settings . retrySettings . retryPolicy
+    let what = s ^. context . settings . retrySettings . retryHandlers
+    r <- try $
+        recovering how what $ \i -> do
+            hr <-
+                if rsIterNumber i == 0
+                    then fn a s
+                    else fn (newRequest s) (adjust s)
+            -- [Note: Error responses]
+            maybe (return hr) throwM (toResponseError hr)
     return $ either fromResponseError id r
   where
     adjust s =
-        let Ms x = s^.context.settings.retrySettings.sendTimeoutChange
-            Ms y = s^.context.settings.retrySettings.recvTimeoutChange
-        in over (context.settings.connSettings.sendTimeout)     (Ms . (+ x) . ms)
-         . over (context.settings.connSettings.responseTimeout) (Ms . (+ y) . ms)
-         $ s
+        let Ms x = s ^. context . settings . retrySettings . sendTimeoutChange
+            Ms y = s ^. context . settings . retrySettings . recvTimeoutChange
+         in over (context . settings . connSettings . sendTimeout) (Ms . (+ x) . ms)
+                . over (context . settings . connSettings . responseTimeout) (Ms . (+ y) . ms)
+                $ s
 
     newRequest s =
-        case s^.context.settings.retrySettings.reducedConsistency of
+        case s ^. context . settings . retrySettings . reducedConsistency of
             Nothing -> a
-            Just  c ->
+            Just c ->
                 case a of
-                    RqQuery   (Query   q p) -> RqQuery (Query q p { consistency = c })
-                    RqExecute (Execute q p) -> RqExecute (Execute q p { consistency = c })
-                    RqBatch b               -> RqBatch b { batchConsistency = c }
-                    _                       -> a
+                    RqQuery (Query q p) -> RqQuery (Query q p {consistency = c})
+                    RqExecute (Execute q p) -> RqExecute (Execute q p {consistency = c})
+                    RqBatch b -> RqBatch b {batchConsistency = c}
+                    _ -> a
 
 ------------------------------------------------------------------------------
 -- Control connection handling
@@ -583,9 +594,9 @@ setupControl c = do
     env <- ask
     pol <- view policy
     ctx <- view context
-    l <- updateHost (c^.host) . listToMaybe <$> C.query c One Disco.local ()
+    l <- updateHost (c ^. host) . listToMaybe <$> C.query c One Disco.local ()
     r <- discoverPeers ctx c
-    (up, down) <- mkHostMap ctx pol (l:r)
+    (up, down) <- mkHostMap ctx pol (l : r)
     m <- view hostmap
     let h = Map.union up down
     atomically' $ writeTVar m h
@@ -594,7 +605,7 @@ setupControl c = do
     logInfo' $ "Known hosts: " <> string8 (show (Map.keys h))
     j <- view jobs
     for_ (Map.keys down) $ \d ->
-        runJob j (d^.hostAddr) $
+        runJob j (d ^. hostAddr) $
             runClient env $ monitor (Ms 1000) (Ms 60000) d
     ctl <- view control
     let c' = set C.host l c
@@ -608,27 +619,28 @@ mkHostMap c p = liftIO . foldrM checkHost (Map.empty, Map.empty)
   where
     checkHost h (up, down) = do
         okay <- acceptable p h
-        if okay then do
-            isUp <- C.canConnect h
-            if isUp then do
-                up' <- Map.insert h <$> mkPool c h <*> pure up
-                return (up', down)
-            else do
-                down' <- Map.insert h <$> mkPool c h <*> pure down
-                return (up, down')
-        else
-            return (up, down)
+        if okay
+            then do
+                isUp <- C.canConnect h
+                if isUp
+                    then do
+                        up' <- Map.insert h <$> mkPool c h <*> pure up
+                        return (up', down)
+                    else do
+                        down' <- Map.insert h <$> mkPool c h <*> pure down
+                        return (up, down')
+            else return (up, down)
 
 -- | Check if the control connection is healthy.
 checkControl :: Client Bool
-checkControl = do
-    cc <- view connection <$> (readTVarIO' =<< view control)
-    rs <- liftIO $ C.requestRaw cc (RqOptions Options)
-    return $ case rs of
-        RsSupported {} -> True
-        _              -> False
-  `recover`
-    False
+checkControl =
+    do
+        cc <- view connection <$> (readTVarIO' =<< view control)
+        rs <- liftIO $ C.requestRaw cc (RqOptions Options)
+        return $ case rs of
+            RsSupported {} -> True
+            _ -> False
+        `recover` False
 
 -- | Asynchronously replace the control connection.
 --
@@ -649,35 +661,38 @@ checkControl = do
 replaceControl :: Client ()
 replaceControl = do
     e <- ask
-    let l = e^.context.settings.logger
-    liftIO $ mask $ \restore -> do
-        cc <- setReconnecting e
-        for_ cc $ \c -> forkIO $
-            restore $ do
-                ignore (C.close c)
-                reconnect e l
-              `catchAll` \ex -> do
-                logError l $ "Control connection reconnect aborted: " <> string8 (show ex)
-                atomically $ modifyTVar' (e^.control) (set state Disconnected)
+    let l = e ^. context . settings . logger
+    liftIO $
+        mask $ \restore -> do
+            cc <- setReconnecting e
+            for_ cc $ \c ->
+                forkIO $
+                    restore $
+                        do
+                            ignore (C.close c)
+                            reconnect e l
+                            `catchAll` \ex -> do
+                                logError l $ "Control connection reconnect aborted: " <> string8 (show ex)
+                                atomically $ modifyTVar' (e ^. control) (set state Disconnected)
   where
     setReconnecting e = atomically $ do
-        ctrl <- readTVar (e^.control)
-        if ctrl^.state /= Reconnecting
+        ctrl <- readTVar (e ^. control)
+        if ctrl ^. state /= Reconnecting
             then do
-                writeTVar (e^.control) (set state Reconnecting ctrl)
-                return $ Just (ctrl^.connection)
-            else
-                return Nothing
+                writeTVar (e ^. control) (set state Reconnecting ctrl)
+                return $ Just (ctrl ^. connection)
+            else return Nothing
 
     reconnect e l = recovering adInf (onExc l) $ \_ -> do
-        hosts <- NE.nonEmpty <$> current (e^.policy)
+        hosts <- NE.nonEmpty <$> current (e ^. policy)
         case hosts of
-            Just hs -> hs `tryAll` (runClient e . renewControl)
-                `catch` \x -> case fromException x of
-                    Just (SomeAsyncException _) -> throwM x
-                    Nothing                     -> do
-                        logError l "All known hosts unreachable."
-                        runClient e rebootControl
+            Just hs ->
+                hs `tryAll` (runClient e . renewControl)
+                    `catch` \x -> case fromException x of
+                        Just (SomeAsyncException _) -> throwM x
+                        Nothing -> do
+                            logError l "All known hosts unreachable."
+                            runClient e rebootControl
             Nothing -> do
                 logError l "No known hosts."
                 runClient e rebootControl
@@ -686,11 +701,13 @@ replaceControl = do
 
     onExc l =
         [ const $ Handler $ \(_ :: SomeAsyncException) -> return False
-        , const $ Handler $ \(e :: SomeException)      -> do
-            logError l $ "Replacement of control connection failed with: "
-                <> string8 (show e)
-                <> ". Retrying ..."
-            return True
+        , const $
+            Handler $ \(e :: SomeException) -> do
+                logError l $
+                    "Replacement of control connection failed with: "
+                        <> string8 (show e)
+                        <> ". Retrying ..."
+                return True
         ]
 
 -- | Create a new connection to a known host and set it up
@@ -699,9 +716,9 @@ renewControl :: Host -> Client ()
 renewControl h = do
     ctx <- view context
     logInfo' "Renewing control connection with known host ..."
-    let s = ctx^.settings
+    let s = ctx ^. settings
     bracketOnError
-        (C.connect (s^.connSettings) (ctx^.timeouts) (s^.protoVersion) (s^.logger) h)
+        (C.connect (s ^. connSettings) (ctx ^. timeouts) (s ^. protoVersion) (s ^. logger) h)
         (liftIO . C.close)
         setupControl
 
@@ -712,7 +729,7 @@ rebootControl = do
     e <- ask
     logInfo' "Renewing control connection with initial contacts ..."
     bracketOnError
-        (liftIO (mkContact (e^.context)))
+        (liftIO (mkContact (e ^. context)))
         (liftIO . C.close)
         setupControl
 
@@ -723,7 +740,7 @@ onCqlEvent :: Event -> Client ()
 onCqlEvent x = do
     logInfo' $ "Event: " <> string8 (show x)
     pol <- view policy
-    prt <- view (context.settings.portnumber)
+    prt <- view (context . settings . portnumber)
     case x of
         StatusEvent Down (sock2inet prt -> a) -> do
             liftIO $ onEvent pol (HostDown a)
@@ -731,7 +748,7 @@ onCqlEvent x = do
         TopologyEvent RemovedNode (sock2inet prt -> a) -> do
             hmap <- view hostmap
             atomically' $
-                modifyTVar' hmap (Map.filterWithKey (\h _ -> h^.hostAddr /= a))
+                modifyTVar' hmap (Map.filterWithKey (\h _ -> h ^. hostAddr /= a))
             liftIO $ onEvent pol (HostGone a)
             replaceControlIfNecessary a
         StatusEvent Up (sock2inet prt -> a) -> do
@@ -739,31 +756,33 @@ onCqlEvent x = do
             startMonitor s a
         TopologyEvent NewNode (sock2inet prt -> a) -> do
             s <- ask
-            let ctx  = s^.context
-            let hmap = s^.hostmap
-            ctrl <- readTVarIO' (s^.control)
-            let c = ctrl^.connection
+            let ctx = s ^. context
+            let hmap = s ^. hostmap
+            ctrl <- readTVarIO' (s ^. control)
+            let c = ctrl ^. connection
             peers <- liftIO $ discoverPeers ctx c `recover` []
-            let h = fromMaybe (Host a "" "") $ find ((a == ) . view hostAddr) peers
+            let h = fromMaybe (Host a "" "") $ find ((a ==) . view hostAddr) peers
             okay <- liftIO $ acceptable pol h
             when okay $ do
                 p <- mkPool ctx h
                 atomically' $ modifyTVar' hmap (Map.alter (maybe (Just p) Just) h)
                 liftIO $ onEvent pol (HostNew h)
-                tryRunJob_ (s^.jobs) a $ runClient s (prepareAllQueries h)
+                tryRunJob_ (s ^. jobs) a $ runClient s (prepareAllQueries h)
         SchemaEvent _ -> return ()
   where
     startMonitor s a = do
-        hmp <- readTVarIO' (s^.hostmap)
+        hmp <- readTVarIO' (s ^. hostmap)
         case find ((a ==) . view hostAddr) (Map.keys hmp) of
-            Just h -> tryRunJob_ (s^.jobs) a $ runClient s $ do
-                monitor (Ms 3000) (Ms 60000) h
-                prepareAllQueries h
+            Just h -> tryRunJob_ (s ^. jobs) a $
+                runClient s $ do
+                    monitor (Ms 3000) (Ms 60000) h
+                    prepareAllQueries h
             Nothing -> return ()
 
     replaceControlIfNecessary a = do
         ctrl <- readTVarIO' =<< view control
-        when (ctrl^.connection.host.hostAddr == a) replaceControl
+        when (ctrl ^. connection . host . hostAddr == a) replaceControl
+
 -----------------------------------------------------------------------------
 -- Utilities
 
@@ -772,14 +791,15 @@ onCqlEvent x = do
 -- 'RsResult' nor 'RsError', an 'UnexpectedResponse' is thrown.
 getResult :: MonadThrow m => HostResponse k a b -> m (Result k a b)
 getResult (HostResponse _ (RsResult _ _ r)) = return r
-getResult (HostResponse h (RsError  t w e)) = throwM (ResponseError h t w e)
-getResult hr                                = unexpected hr
+getResult (HostResponse h (RsError t w e)) = throwM (ResponseError h t w e)
+getResult hr = unexpected hr
 {-# INLINE getResult #-}
 
 getPreparedQueryId :: MonadThrow m => HostResponse k a b -> m (Host, QueryId k a b)
-getPreparedQueryId hr = getResult hr >>= \case
-    PreparedResult i _ _ -> return (hrHost hr, i)
-    _                    -> unexpected hr
+getPreparedQueryId hr =
+    getResult hr >>= \case
+        PreparedResult i _ _ -> return (hrHost hr, i)
+        _ -> unexpected hr
 {-# INLINE getPreparedQueryId #-}
 
 unexpected :: MonadThrow m => HostResponse k a b -> m c
@@ -793,19 +813,18 @@ readTVarIO' = liftIO . readTVarIO
 
 logInfo' :: Builder -> Client ()
 logInfo' m = do
-    l <- view (context.settings.logger)
+    l <- view (context . settings . logger)
     liftIO $ logInfo l m
 {-# INLINE logInfo' #-}
 
 logWarn' :: Builder -> Client ()
 logWarn' m = do
-    l <- view (context.settings.logger)
+    l <- view (context . settings . logger)
     liftIO $ logWarn l m
 {-# INLINE logWarn' #-}
 
 logError' :: Builder -> Client ()
 logError' m = do
-    l <- view (context.settings.logger)
+    l <- view (context . settings . logger)
     liftIO $ logError l m
 {-# INLINE logError' #-}
-

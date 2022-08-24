@@ -2,14 +2,14 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-module Database.CQL.IO.Signal
-    ( Signal
-    , signal
-    , connect
-    , emit
-    , (|->)
-    , ($$)
-    ) where
+module Database.CQL.IO.Signal (
+    Signal,
+    signal,
+    connect,
+    emit,
+    (|->),
+    ($$),
+) where
 
 import Control.Concurrent (forkIO)
 import Data.IORef
@@ -20,7 +20,7 @@ signal :: IO (Signal a)
 signal = Sig <$> newIORef []
 
 connect :: Signal a -> (a -> IO ()) -> IO ()
-connect (Sig s) f = modifyIORef s (f:)
+connect (Sig s) f = modifyIORef s (f :)
 
 infixl 2 |->
 (|->) :: Signal a -> (a -> IO ()) -> IO ()

@@ -1,10 +1,9 @@
 -- This Source Code Form is subject to the terms of the Mozilla Public
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Database.CQL.IO.Cluster.Discovery where
 
@@ -15,11 +14,12 @@ import Database.CQL.Protocol
 
 data Peer = Peer
     { peerAddr :: !IP
-    , peerRPC  :: !IP
-        -- ^ The address for the client to connect to.
-    , peerDC   :: !Text
+    , peerRPC :: !IP
+    -- ^ The address for the client to connect to.
+    , peerDC :: !Text
     , peerRack :: !Text
-    } deriving Show
+    }
+    deriving (Show)
 
 recordInstance ''Peer
 

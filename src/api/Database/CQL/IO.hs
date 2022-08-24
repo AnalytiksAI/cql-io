@@ -1,6 +1,8 @@
 -- This Source Code Form is subject to the terms of the Mozilla Public
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE LambdaCase #-}
 
 -- | This driver operates on some state which must be initialised prior to
 -- executing client operations and terminated eventually. The library uses
@@ -23,160 +25,159 @@
 -- [Identity "3.4.4"]
 -- > shutdown c
 -- @
---
+module Database.CQL.IO (
+    -- * Client Settings
+    Settings,
+    S.defSettings,
+    addContact,
+    setCompression,
+    setConnectTimeout,
+    setContacts,
+    setIdleTimeout,
+    setKeyspace,
+    setMaxConnections,
+    setMaxStreams,
+    setMaxTimeouts,
+    setPolicy,
+    setPoolStripes,
+    setPortNumber,
+    PrepareStrategy (..),
+    setPrepareStrategy,
+    setProtocolVersion,
+    setResponseTimeout,
+    setSendTimeout,
+    setRetrySettings,
+    setMaxRecvBuffer,
+    setSSLContext,
 
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE LambdaCase    #-}
+    -- ** Logging
+    Logger (..),
+    LogLevel (..),
+    setLogger,
+    nullLogger,
+    stdoutLogger,
 
-module Database.CQL.IO
-    ( -- * Client Settings
-      Settings
-    , S.defSettings
-    , addContact
-    , setCompression
-    , setConnectTimeout
-    , setContacts
-    , setIdleTimeout
-    , setKeyspace
-    , setMaxConnections
-    , setMaxStreams
-    , setMaxTimeouts
-    , setPolicy
-    , setPoolStripes
-    , setPortNumber
-    , PrepareStrategy (..)
-    , setPrepareStrategy
-    , setProtocolVersion
-    , setResponseTimeout
-    , setSendTimeout
-    , setRetrySettings
-    , setMaxRecvBuffer
-    , setSSLContext
+    -- ** Authentication
+    setAuthentication,
+    Authenticator (..),
+    AuthContext,
+    ConnId,
+    authConnId,
+    authHost,
+    AuthMechanism (..),
+    AuthUser (..),
+    AuthPass (..),
+    passwordAuthenticator,
 
-      -- ** Logging
-    , Logger (..)
-    , LogLevel (..)
-    , setLogger
-    , nullLogger
-    , stdoutLogger
+    -- ** Retry Settings
+    RetrySettings,
+    noRetry,
 
-      -- ** Authentication
-    , setAuthentication
-    , Authenticator (..)
-    , AuthContext
-    , ConnId
-    , authConnId
-    , authHost
-    , AuthMechanism (..)
-    , AuthUser      (..)
-    , AuthPass      (..)
-    , passwordAuthenticator
+    -- *** Default
+    defRetrySettings,
+    defRetryPolicy,
+    defRetryHandlers,
 
-      -- ** Retry Settings
-    , RetrySettings
-    , noRetry
-      -- *** Default
-    , defRetrySettings
-    , defRetryPolicy
-    , defRetryHandlers
-      -- *** Eager
-    , eagerRetrySettings
-    , eagerRetryPolicy
-    , eagerRetryHandlers
-      -- *** Configuration
-    , setRetryPolicy
-    , setRetryHandlers
-    , adjustConsistency
-    , adjustSendTimeout
-    , adjustResponseTimeout
+    -- *** Eager
+    eagerRetrySettings,
+    eagerRetryPolicy,
+    eagerRetryHandlers,
 
-      -- ** Load-balancing
-    , Policy (..)
-    , random
-    , roundRobin
+    -- *** Configuration
+    setRetryPolicy,
+    setRetryHandlers,
+    adjustConsistency,
+    adjustSendTimeout,
+    adjustResponseTimeout,
 
-      -- *** Hosts
-    , Host
-    , HostEvent (..)
-    , InetAddr  (..)
-    , hostAddr
-    , dataCentre
-    , rack
+    -- ** Load-balancing
+    Policy (..),
+    random,
+    roundRobin,
 
-      -- * Client Monad
-    , Client
-    , MonadClient (..)
-    , ClientState
-    , DebugInfo   (..)
-    , init
-    , runClient
-    , shutdown
-    , debugInfo
+    -- *** Hosts
+    Host,
+    HostEvent (..),
+    InetAddr (..),
+    hostAddr,
+    dataCentre,
+    rack,
 
-      -- * Queries
-      -- $queries
-    , R, W, S
-    , QueryParams       (..)
-    , defQueryParams
-    , Consistency       (..)
-    , SerialConsistency (..)
-    , Identity          (..)
+    -- * Client Monad
+    Client,
+    MonadClient (..),
+    ClientState,
+    DebugInfo (..),
+    init,
+    runClient,
+    shutdown,
+    debugInfo,
 
-      -- ** Basic Queries
-    , QueryString (..)
-    , query
-    , query1
-    , write
-    , schema
+    -- * Queries
+    -- $queries
+    R,
+    W,
+    S,
+    QueryParams (..),
+    defQueryParams,
+    Consistency (..),
+    SerialConsistency (..),
+    Identity (..),
 
-      -- ** Prepared Queries
-    , PrepQuery
-    , prepared
-    , queryString
+    -- ** Basic Queries
+    QueryString (..),
+    query,
+    query1,
+    write,
+    schema,
 
-      -- ** Paging
-    , Page (..)
-    , emptyPage
-    , paginate
+    -- ** Prepared Queries
+    PrepQuery,
+    prepared,
+    queryString,
 
-      -- ** Lightweight Transactions
-    , Row
-    , fromRow
-    , trans
+    -- ** Paging
+    Page (..),
+    emptyPage,
+    paginate,
 
-      -- ** Batch Queries
-    , BatchM
-    , addQuery
-    , addPrepQuery
-    , setType
-    , setConsistency
-    , setSerialConsistency
-    , batch
+    -- ** Lightweight Transactions
+    Row,
+    fromRow,
+    trans,
 
-      -- ** Retries
-    , retry
-    , once
+    -- ** Batch Queries
+    BatchM,
+    addQuery,
+    addPrepQuery,
+    setType,
+    setConsistency,
+    setSerialConsistency,
+    batch,
 
-      -- ** Low-Level Queries
-      -- $low-level-queries
-    , RunQ (..)
-    , HostResponse (..)
-    , request
-    , getResult
+    -- ** Retries
+    retry,
+    once,
 
-      -- * Exceptions
-    , ProtocolError       (..)
-    , HostError           (..)
-    , ConnectionError     (..)
-    , ResponseError       (..)
-    , AuthenticationError (..)
-    , HashCollision       (..)
-    ) where
+    -- ** Low-Level Queries
+    -- $low-level-queries
+    RunQ (..),
+    HostResponse (..),
+    request,
+    getResult,
+
+    -- * Exceptions
+    ProtocolError (..),
+    HostError (..),
+    ConnectionError (..),
+    ResponseError (..),
+    AuthenticationError (..),
+    HashCollision (..),
+) where
 
 import Control.Applicative
 import Data.Functor.Identity
 import Data.Maybe (isJust, listToMaybe)
-import Database.CQL.Protocol
 import Database.CQL.IO.Batch hiding (batch)
 import Database.CQL.IO.Client
 import Database.CQL.IO.Cluster.Host
@@ -186,6 +187,7 @@ import Database.CQL.IO.Exception
 import Database.CQL.IO.Log
 import Database.CQL.IO.PrepQuery
 import Database.CQL.IO.Settings as S
+import Database.CQL.Protocol
 import Prelude hiding (init)
 
 import qualified Database.CQL.IO.Batch as B
@@ -250,10 +252,11 @@ import qualified Database.CQL.IO.Batch as B
 
 -- | A type which can be run as a query.
 class RunQ q where
-    runQ :: (MonadClient m, Tuple a, Tuple b)
-         => q k a b
-         -> QueryParams a
-         -> m (HostResponse k a b)
+    runQ ::
+        (MonadClient m, Tuple a, Tuple b) =>
+        q k a b ->
+        QueryParams a ->
+        m (HostResponse k a b)
 
 instance RunQ QueryString where
     runQ q p = request (RqQuery (Query q p))
@@ -267,7 +270,7 @@ query q p = do
     r <- runQ q p
     getResult r >>= \case
         RowsResult _ b -> return b
-        _              -> unexpected r
+        _ -> unexpected r
 
 -- | Run a CQL read-only query returning a single result.
 query1 :: (MonadClient m, Tuple a, Tuple b, RunQ q) => q R a b -> QueryParams a -> m (Maybe b)
@@ -283,7 +286,7 @@ write q p = do
     r <- runQ q p
     getResult r >>= \case
         VoidResult -> return ()
-        _          -> unexpected r
+        _ -> unexpected r
 
 -- | Run a CQL conditional write query (e.g. insert\/update\/delete) as a
 -- "lightweight transaction", returning the result 'Row's describing the
@@ -293,7 +296,7 @@ trans q p = do
     r <- runQ q p
     getResult r >>= \case
         RowsResult _ b -> return b
-        _              -> unexpected r
+        _ -> unexpected r
 
 -- | Run a CQL schema query, returning 'SchemaChange' information, if any.
 schema :: (MonadClient m, Tuple a, RunQ q) => q S a () -> QueryParams a -> m (Maybe SchemaChange)
@@ -301,8 +304,8 @@ schema q p = do
     r <- runQ q p
     getResult r >>= \case
         SchemaChangeResult s -> return $ Just s
-        VoidResult           -> return Nothing
-        _                    -> unexpected r
+        VoidResult -> return Nothing
+        _ -> unexpected r
 
 -- | Run a batch query against a Cassandra node.
 batch :: MonadClient m => BatchM () -> m ()
@@ -312,10 +315,11 @@ batch = liftClient . B.batch
 -- as an indication of whether there is more data available and the actual
 -- action to fetch the next page.
 data Page a = Page
-    { hasMore  :: !Bool
-    , result   :: [a]
+    { hasMore :: !Bool
+    , result :: [a]
     , nextPage :: Client (Page a)
-    } deriving (Functor)
+    }
+    deriving (Functor)
 
 -- | A page with an empty result list.
 emptyPage :: Page a
@@ -332,13 +336,11 @@ emptyPage = Page False [] (return emptyPage)
 -- 'nextPage' will return an empty list in 'result'.
 paginate :: (MonadClient m, Tuple a, Tuple b, RunQ q) => q R a b -> QueryParams a -> m (Page b)
 paginate q p = do
-    let p' = p { pageSize = pageSize p <|> Just 10000 }
+    let p' = p {pageSize = pageSize p <|> Just 10000}
     r <- runQ q p'
     getResult r >>= \case
         RowsResult m b ->
-            if isJust (pagingState m) then
-                return $ Page True b (paginate q p' { queryPagingState = pagingState m })
-            else
-                return $ Page False b (return emptyPage)
+            if isJust (pagingState m)
+                then return $ Page True b (paginate q p' {queryPagingState = pagingState m})
+                else return $ Page False b (return emptyPage)
         _ -> unexpected r
-

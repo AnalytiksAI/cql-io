@@ -2,18 +2,18 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-module Database.CQL.IO.Jobs
-    ( Jobs
-    , JobReplaced (..)
-    , newJobs
-    , runJob
-    , runJob_
-    , tryRunJob
-    , tryRunJob_
-    , cancelJobs
-    , listJobs
-    , listJobKeys
-    ) where
+module Database.CQL.IO.Jobs (
+    Jobs,
+    JobReplaced (..),
+    newJobs,
+    runJob,
+    runJob_,
+    tryRunJob,
+    tryRunJob_,
+    cancelJobs,
+    listJobs,
+    listJobKeys,
+) where
 
 import Control.Concurrent
 import Control.Concurrent.Async
@@ -43,8 +43,9 @@ data Job = Job
 -- | The asynchronous exception used to cancel a job if it is replaced
 -- by another job.
 data JobReplaced = JobReplaced deriving (Eq, Show, Typeable)
+
 instance Exception JobReplaced where
-    toException   = asyncExceptionToException
+    toException = asyncExceptionToException
     fromException = asyncExceptionFromException
 
 newJobs :: MonadIO m => m (Jobs k)
@@ -61,9 +62,9 @@ runJob j@(Jobs ref) k = runJobWith addJob j k
   where
     addJob new = atomicModifyIORef' ref $ \jobs ->
         let jobs' = Map.insert k new jobs
-            old   = Map.lookup k jobs
-            val   = jobAsync new
-        in (jobs', (True, val, old))
+            old = Map.lookup k jobs
+            val = jobAsync new
+         in (jobs', (True, val, old))
 
 -- | 'tryRunJob' and ignore the result.
 tryRunJob_ :: (MonadIO m, Ord k) => Jobs k -> k -> IO () -> m ()
@@ -79,8 +80,8 @@ tryRunJob j@(Jobs ref) k = runJobWith addJob j k
             then (jobs, (False, Nothing, Nothing))
             else
                 let jobs' = Map.insert k new jobs
-                    val   = Just (jobAsync new)
-                in (jobs', (True, val, Nothing))
+                    val = Just (jobAsync new)
+                 in (jobs', (True, val, Nothing))
 
 -- | Cancel all running jobs.
 cancelJobs :: MonadIO m => Jobs k -> m ()
@@ -101,12 +102,13 @@ listJobKeys (Jobs j) = liftIO $ Map.keys <$> readIORef j
 ------------------------------------------------------------------------------
 -- Internal
 
-runJobWith :: (MonadIO m, Ord k)
-    => (Job -> IO (Bool, a, Maybe Job))
-    -> Jobs k
-    -> k
-    -> IO ()
-    -> m a
+runJobWith ::
+    (MonadIO m, Ord k) =>
+    (Job -> IO (Bool, a, Maybe Job)) ->
+    Jobs k ->
+    k ->
+    IO () ->
+    m a
 runJobWith addJob (Jobs ref) k io = liftIO $ do
     u <- newUnique
     l <- newEmptyMVar
@@ -114,14 +116,15 @@ runJobWith addJob (Jobs ref) k io = liftIO $ do
     -- either be unblocked by putMVar or cancelled, hence masking
     -- between 'async' and 'run' (nb. 'takeMVar' is interruptible).
     mask $ \restore -> do
-        new <- async $ do
-            takeMVar l
-            restore io
-            remove u
-          `catches`
-            [ Handler $ \x@JobReplaced     -> throwM x
-            , Handler $ \x@SomeException{} -> remove u >> throwM x
-            ]
+        new <-
+            async $
+                do
+                    takeMVar l
+                    restore io
+                    remove u
+                    `catches` [ Handler $ \x@JobReplaced -> throwM x
+                              , Handler $ \x@SomeException {} -> remove u >> throwM x
+                              ]
         restore (run u l new) `onException` cancel new
   where
     run u l new = do
@@ -132,8 +135,7 @@ runJobWith addJob (Jobs ref) k io = liftIO $ do
 
     remove u = atomicModifyIORef' ref $ \jobs ->
         let update = Map.update $ \a ->
-                        case a of
-                            Job u' _ | u == u' -> Nothing
-                            _                  -> Just a
-        in (update k jobs, ())
-
+                case a of
+                    Job u' _ | u == u' -> Nothing
+                    _ -> Just a
+         in (update k jobs, ())

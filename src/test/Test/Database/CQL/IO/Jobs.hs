@@ -1,13 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Test.Database.CQL.IO.Jobs (tests) where
 
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Exception
-import Data.IORef
 import Data.Either
+import Data.IORef
 import Data.Maybe
 import Data.Numbers.Primes
 import Test.Tasty
@@ -16,13 +16,15 @@ import Test.Tasty.HUnit
 import Database.CQL.IO.Jobs
 
 tests :: TestTree
-tests = testGroup "Database.CQL.IO.Jobs"
-    [ testCase "run-sequential"     testRunJobSequential
-    , testCase "run-concurrent"     testRunJobConcurrent
-    , testCase "try-run-sequential" testTryRunJobSequential
-    , testCase "try-run-concurrent" testTryRunJobConcurrent
-    , testCase "try-run-replace"    testTryRunJobReplace
-    ]
+tests =
+    testGroup
+        "Database.CQL.IO.Jobs"
+        [ testCase "run-sequential" testRunJobSequential
+        , testCase "run-concurrent" testRunJobConcurrent
+        , testCase "try-run-sequential" testTryRunJobSequential
+        , testCase "try-run-concurrent" testTryRunJobConcurrent
+        , testCase "try-run-replace" testTryRunJobReplace
+        ]
 
 -----------------------------------------------------------------------------
 -- Tests
@@ -38,8 +40,8 @@ testRunJobSequential = do
     (fails, succs) <- execute mapM prepare (take 100 primes)
     val <- readIORef iref
     map fromException fails @?= replicate 99 (Just JobReplaced)
-    succs                   @?= [()]
-    val                     @?= 541 -- 100th prime => 100th job
+    succs @?= [()]
+    val @?= 541 -- 100th prime => 100th job
 
 -- 1. Concurrently run jobs with the same key, each waiting on a latch.
 -- 2. Release all latches.
@@ -50,11 +52,11 @@ testRunJobConcurrent = do
     jobs <- newJobs
     iref <- newIORef (0 :: Int)
     let prepare = prepareRun jobs . incJob iref
-    (fails, succs) <- execute mapConcurrently prepare [1..100 :: Int]
+    (fails, succs) <- execute mapConcurrently prepare [1 .. 100 :: Int]
     val <- readIORef iref
     map fromException fails @?= replicate 99 (Just JobReplaced)
-    succs                   @?= [()]
-    val                     @?= 1
+    succs @?= [()]
+    val @?= 1
 
 -- 1. Try to run jobs for the same key, each waiting on a latch.
 -- 2. Release all latches.
@@ -67,8 +69,8 @@ testTryRunJobSequential = do
     (fails, succs) <- execute mapM prepare (take 100 primes)
     val <- readIORef iref
     length fails @?= 0
-    succs        @?= [()]
-    val          @?= 2
+    succs @?= [()]
+    val @?= 2
 
 -- 1. Concurrently try to run jobs for the same key, each waiting on a latch.
 -- 2. Release all latches.
@@ -78,11 +80,11 @@ testTryRunJobConcurrent = do
     jobs <- newJobs
     iref <- newIORef (0 :: Int)
     let prepare = prepareTryRun jobs . incJob iref
-    (fails, succs) <- execute mapConcurrently prepare [1..100]
+    (fails, succs) <- execute mapConcurrently prepare [1 .. 100]
     val <- readIORef iref
     length fails @?= 0
-    succs        @?= [()]
-    val          @?= 1
+    succs @?= [()]
+    val @?= 1
 
 -- 1. Concurrently try to run jobs for the same key, each waiting on
 --    a latch. One of the jobs is run unconditionally and should
@@ -95,18 +97,18 @@ testTryRunJobReplace = do
     jobs <- newJobs
     iref <- newIORef (1 :: Int)
     let prepare = choose jobs (mulJob iref)
-    (Just a1, l1)  <- prepare 2 -- there should always be a job to replace
+    (Just a1, l1) <- prepare 2 -- there should always be a job to replace
     (fails, succs) <- execute mapConcurrently prepare (take 99 (drop 1 primes))
     putMVar l1 ()
-    r1  <- either Just (const Nothing) <$> waitCatch a1
+    r1 <- either Just (const Nothing) <$> waitCatch a1
     val <- readIORef iref
     (fromException =<< r1) @?= Just JobReplaced
-    length fails           @?= 0
-    succs                  @?= [()]
-    val                    @?= 229 -- 50th's prime is unconditionally run
+    length fails @?= 0
+    succs @?= [()]
+    val @?= 229 -- 50th's prime is unconditionally run
   where
     choose jobs run i
-        | i == 229  = prepareRun    jobs (run i)
+        | i == 229 = prepareRun jobs (run i)
         | otherwise = prepareTryRun jobs (run i)
 
 -----------------------------------------------------------------------------
@@ -130,11 +132,11 @@ prepareTryRun jobs run = do
     a <- tryRunJob jobs jobKey $ takeMVar l >> run
     return (a, l)
 
-execute
-    :: (forall a b. (a -> IO b) -> [a] -> IO [b])
-    -> PrepareJob i
-    -> [i]
-    -> IO ([SomeException], [()])
+execute ::
+    (forall a b. (a -> IO b) -> [a] -> IO [b]) ->
+    PrepareJob i ->
+    [i] ->
+    IO ([SomeException], [()])
 execute runIO prepJob input = do
     js <- runIO prepJob input
     as <- runIO (\(a, l) -> putMVar l () *> pure a) js
@@ -145,4 +147,3 @@ incJob iref _ = atomicModifyIORef' iref (\x -> (x + 1, ()))
 
 mulJob :: ExecuteJob Int
 mulJob iref i = atomicModifyIORef' iref (\x -> (x * i, ()))
-

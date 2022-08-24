@@ -1,20 +1,19 @@
 -- This Source Code Form is subject to the terms of the Mozilla Public
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE LambdaCase #-}
 
-module Database.CQL.IO.Batch
-    ( BatchM
-    , batch
-    , addQuery
-    , addPrepQuery
-    , setType
-    , setConsistency
-    , setSerialConsistency
-    ) where
+module Database.CQL.IO.Batch (
+    BatchM,
+    batch,
+    addQuery,
+    addPrepQuery,
+    setType,
+    setConsistency,
+    setSerialConsistency,
+) where
 
 import Control.Applicative
 import Control.Concurrent.STM (atomically)
@@ -30,7 +29,8 @@ import Prelude
 -- | 'Batch' construction monad.
 newtype BatchM a = BatchM
     { unBatchM :: StateT Batch Client a
-    } deriving (Functor, Applicative, Monad)
+    }
+    deriving (Functor, Applicative, Monad)
 
 -- | Execute the complete 'Batch' statement.
 batch :: BatchM a -> Client ()
@@ -39,12 +39,13 @@ batch m = do
     r <- executeWithPrepare Nothing (RqBatch b :: Raw Request)
     getResult r >>= \case
         VoidResult -> return ()
-        _          -> unexpected r
+        _ -> unexpected r
 
 -- | Add a query to this batch.
 addQuery :: (Show a, Tuple a, Tuple b) => QueryString W a b -> a -> BatchM ()
-addQuery q p = BatchM $ modify' $ \b ->
-    b { batchQuery = BatchQuery q p : batchQuery b }
+addQuery q p = BatchM $
+    modify' $ \b ->
+        b {batchQuery = BatchQuery q p : batchQuery b}
 
 -- | Add a prepared query to this batch.
 addPrepQuery :: (Show a, Tuple a, Tuple b) => PrepQuery W a b -> a -> BatchM ()
@@ -57,19 +58,19 @@ addPrepQuery q p = BatchM $ do
         liftIO $ atomically (insert q i pq)
         add i
 
-    add i = modify' $ \b -> b { batchQuery = BatchPrepared i p : batchQuery b }
+    add i = modify' $ \b -> b {batchQuery = BatchPrepared i p : batchQuery b}
 
 -- | Set the type of this batch.
 setType :: BatchType -> BatchM ()
-setType t = BatchM $ modify' $ \b -> b { batchType = t }
+setType t = BatchM $ modify' $ \b -> b {batchType = t}
 
 -- | Set 'Batch' consistency level.
 setConsistency :: Consistency -> BatchM ()
-setConsistency c = BatchM $ modify' $ \b -> b { batchConsistency = c }
+setConsistency c = BatchM $ modify' $ \b -> b {batchConsistency = c}
 
 -- | Set 'Batch' serial consistency.
 setSerialConsistency :: SerialConsistency -> BatchM ()
-setSerialConsistency c = BatchM $ modify' $ \b -> b { batchSerialConsistency = Just c }
+setSerialConsistency c = BatchM $ modify' $ \b -> b {batchSerialConsistency = Just c}
 
 #if ! MIN_VERSION_transformers(0,4,0)
 modify' :: Monad m => (s -> s) -> StateT s m ()

@@ -80,11 +80,11 @@ mkSock (InetAddr a) = S.socket (familyOf a) S.Stream S.defaultProtocol
 
 close :: Socket -> IO ()
 close (Stream s) = S.close s
-close (Tls s _) = S.close s
+close (Tls s c) = SSL.shutdown c SSL.Unidirectional >> S.close s
 
-shutdown :: Socket -> IO ()
-shutdown (Stream s) = S.gracefulClose s 2500
-shutdown (Tls _ t) = SSL.shutdown t SSL.Bidirectional
+shutdown :: Socket -> ShutdownCmd -> IO ()
+shutdown (Stream s) cmd = S.shutdown s cmd
+shutdown _ _ = return ()
 
 recv :: Int -> InetAddr -> Socket -> Int -> IO Lazy.ByteString
 recv x a (Stream s) n = receive x a (NB.recv s) n
@@ -96,8 +96,7 @@ receive x i f n = toLazyByteString <$> go n mempty
   where
     go !k !bb = do
         a <- f (k `min` x)
-        when (Bytes.null a) $
-            throwM (ConnectionClosed i)
+        when (Bytes.null a) $ throwM (ConnectionClosed i)
         let b = bb <> byteString a
         let m = k - Bytes.length a
         if m > 0 then go m b else return b

@@ -344,7 +344,7 @@ readLoop v g cset tck h sck syn sig sref wlck =
                 forkIOWithUnmask $ \unmask ->
                     unmask
                         ( do
-                            Socket.shutdown sck
+                            Socket.shutdown sck Socket.ShutdownReceive
                             withMVar wlck (const $ Socket.close sck)
                         )
                         `onException` Socket.close sck

@@ -80,11 +80,11 @@ mkSock (InetAddr a) = S.socket (familyOf a) S.Stream S.defaultProtocol
 
 close :: Socket -> IO ()
 close (Stream s) = S.close s
-close (Tls s c) = SSL.shutdown c SSL.Unidirectional >> S.close s
+close (Tls s _) = S.close s
 
 shutdown :: Socket -> ShutdownCmd -> IO ()
 shutdown (Stream s) cmd = S.shutdown s cmd
-shutdown _ _ = return ()
+shutdown (Tls _ c) _ = SSL.shutdown c SSL.Unidirectional
 
 recv :: Int -> InetAddr -> Socket -> Int -> IO Lazy.ByteString
 recv x a (Stream s) n = receive x a (NB.recv s) n
